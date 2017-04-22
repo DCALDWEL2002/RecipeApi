@@ -1,4 +1,3 @@
-
 // load the express package and create our app
 var express = require('express');
 var app 	= express();
@@ -12,13 +11,13 @@ var Recipe = require('./app/models/recipe');
 var User = require('./app/models/USER')
 var superSecret = 'iwishihadapersonalchef'; // for our jwt
 // connect to the database at mongolab.
- mongoose.connect('mongodb://AwesomeAmanda:dave4275@ds143980.mlab.com:43980/movies');
+mongoose.connect('mongodb://AwesomeAmanda:dave4275@ds143980.mlab.com:43980/movies');
 
 // Test for a successful connection
 var db = mongoose.connection;
 db.on('error', console.error.bind(console, 'connection error:'));
 db.once('open', function(){
-	console.log('connected successfully');
+    console.log('connected successfully');
 });
 
 //body parser
@@ -26,26 +25,26 @@ app.use(bodyParser.urlencoded({ extended: true}));
 app.use(bodyParser.json());
 
 app.use(function(req, res, next) {
-	//not entirely confident on these since they are bring up undefined but from the book
-	res.setHeader('Access-Control-Allow-Origin', '*');
-	res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
-	next();
+    //not entirely confident on these since they are bring up undefined but from the book
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST');
+    next();
 });
 //console logging
 app.use(morgan('dev'));
 
 // grab our index homepage
 app.get('/', function(req, res) {
-	res.sendFile(path.join(__dirname + '/index.html'));
+    res.sendFile(path.join(__dirname + '/index.html'));
 });
 
 var apiRouter = express.Router();
 
 // a console notification that all is working
 apiRouter.use(function(req, res, next){
-	// logging
-	console.log('Someone is visiting');
-	next();
+    // logging
+    console.log('Someone is visiting');
+    next();
 });
 
 //*************************************************************************************************************
@@ -69,46 +68,49 @@ apiRouter.post('/login', function(req, res) {
                 var token = jwt.sign({
                     name: user.name,
                     username: user.username}, superSecret, { expiresIn: '72h' //three days
-                    });
+                });
                 res.json({ success: true, message: 'Access granted', token: token});
             }
         }
     });
-    });
-// Path to join the api, enters user in user database
-apiRouter.route('/users')
-	.post(function(req, res){
-		var user = new User;
-
-		user.name = req.body.name;
-		user.username = req.body.username;
-		user.password = req.body.password;
-		user.email = req.body.email;
-
-		user.save(function(err) {
-			if (err) {
-				//duplicate entry
-				if (err.code == 11000)
-					return res.json({ success: false, message: "That username or email is in use"});
-				else
-					return res.send(err);
-			}
-			res.json({ message: 'User created!'})
-		});
-
-	})
-//****************************************************************************************************************
-// grabbed from Kelsey
-//returns all the users
-.get(function(req, res){
-    User.find(function(err, users){
-        if(err) res.send(err);
-
-        res.json(users);
-    });
 });
 
+//THIS SECTION DESCRIBES THE FUNCTIONS THAT PERTAINS TO USERS
 
+// Path to join the api, enters user in user database
+apiRouter.route('/users')
+    .post(function(req, res){
+        var user = new User;
+
+        user.name = req.body.name;
+        user.username = req.body.username;
+        user.password = req.body.password;
+        user.email = req.body.email;
+
+        user.save(function(err) {
+            if (err) {
+                //duplicate entry
+                if (err.code == 11000)
+                    return res.json({ success: false, message: "That username or email is in use"});
+                else
+                    return res.send(err);
+            }
+            res.json({ message: 'User created!'})
+        });
+
+    })
+    //****************************************************************************************************************
+    // grabbed from Kelsey
+    //returns all the users
+    .get(function(req, res){
+        User.find(function(err, users){
+            if(err) res.send(err);
+
+            res.json(users);
+        });
+    });
+
+//THIS SECTIONS DESCRIBES THE FUNCTIONS THAT USE /RECIPES
 apiRouter.route('/recipes')
 
 // makes a single recipe
@@ -130,16 +132,49 @@ apiRouter.route('/recipes')
         });
     })
 
-    //returns all the recipes
-    .get(function(req, res){
-        Recipe.find(function(err, recipes){
-            if(err) res.send(err);
+    .put(function (req, res) {
 
-            res.json(recipes);
+        // use the user model to find the user we want
+        Recipe.findByTitle(req.params.recipe.name, function(err, recipe){
+
+            if(err) res.send(err);
+            // update the recipe's info only if it's new
+            if (req.body.name) recipe.name = req.body.name;
+            if (req.body.ingredients.ingredient) recipe.in_name = req.body.ingredients.ingredient;
+            if (req.body.ingredients.measurement) recipe.measurement = req.body.ingredients.measurement;
+            if (req.body.ingredients.amount) recipe.amount = req.body.ingredients.amount;
+
+            // save the recipe
+            recipe.save(function(err){
+                if(err) res.send(err);
+
+                // return a message
+                res.json({message: 'The Recipe was updated!'});
+            });
         });
+    })
+//returns all the recipes regardless of user-owner
+.get(function(req, res){
+    Recipe.find(function(err, recipes){
+        if(err) res.send(err);
+
+        res.json(recipes);
     });
+})
+
+//THIS SECTION DESCRIBES THE FUNCTIONS THAT USE RECIPE_ID
 
 apiRouter.route('/recipes/:recipe_id')
+//returns the recipe by id
+    .getByID(function(req, res){
+    Recipe.find({
+        _id: req.params.recipe_id
+    }, (function(err, recipes){
+        if(err) return res.send(err);
+
+        res.json(recipes);
+    });
+    });
 
 // deletes a recipe by id
     .delete(function (req, res) {
@@ -148,9 +183,24 @@ apiRouter.route('/recipes/:recipe_id')
         }, function(err, movie){
             if (err) return res.send(err);
 
-            res.json({message: 'Successfully deleted'});
+            res.json({message: 'Successfully deleted by ID'});
         });
     });
+
+//THIS SECTION DESCRIBES THE FUNCTIONS THAT USE RECIPE_NAME
+apiRouter.route('recipes/:recipe_name')
+// deletes a recipe by title
+    .delete(function (req, res) {
+        Recipe.remove({
+            name: req.params.recipe_name
+        }, function(err, movie){
+            if (err) return res.send(err);
+                res.json({message: 'Successfully deleted by Name'})
+            else
+                res.json({message:'That is not your recipe to delete'})
+        });
+    });
+
 //using base path
 app.use('/', apiRouter);
 // start the server
